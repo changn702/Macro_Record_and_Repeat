@@ -1,0 +1,775 @@
+##########################################################################
+###### Keyboard and Mouse Macro inputter                            ######
+###### Designed by: Nicholas Chang                                  ######
+###### Rights to use: anyone designated by Nicholas Chang           ######
+###### Program is NOT for sale, but donations appreciated!          ######
+##########################################################################
+
+import sys      #system library
+import os     #library to get OS pathways
+import pyautogui     #to control mouse and keyboard
+import json     #to load and save files
+from pandas import read_csv 
+from pandas import read_excel #to extract data from xmlx
+from time import sleep, localtime     #to create pauses and get timestamps
+from mouse import on_button,unhook_all      #to signal mouse clicks for macro
+
+
+
+#libraries to create GUI
+
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QGridLayout, 
+                             QLabel, QPushButton, QLineEdit, 
+                             QScrollArea, QFrame, QFileDialog, 
+                             QMessageBox, QApplication, QPlainTextEdit,
+                             QCheckBox) 
+from PyQt5.QtGui import QFont, QDoubleValidator, QIntValidator
+from PyQt5.QtCore import Qt
+
+
+#######################################################################    
+#################### Creating UI for main window ######################
+#######################################################################
+
+width,height = pyautogui.size()#to get global variable for system width and height
+        
+class MainUI(QMainWindow):
+    
+    global width, height
+#Initiation parameters
+    
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('Macro Record and Repeat')
+        self.setFixedSize(round(0.325*width),round(0.45*height))
+        self.statusBar()
+        self._centralWidget = QWidget(self)
+        self.setCentralWidget(self._centralWidget)
+        
+        self.macro = []     #variable to get macro. Will always load as a blank
+        self.macro_display = []      #variable to display what was in macro.
+        self.excel_data = []    #variable for excel data
+        self.excel_data_check = 0  #variable to check if excel data was loaded
+        self.sleep_timer = 0.1     #variable to set timer on lag time per action. Auto set to 100 ms
+        # self.failsafe_pictures = [None]     #global variable to set failsafe pictures TODO
+        self.cur_dir = os.getcwd()
+        
+        self.generalLayout = QGridLayout()
+        self.generalLayout.setHorizontalSpacing(15)
+        self.generalLayout.setVerticalSpacing(7)
+        self._centralWidget.setLayout(self.generalLayout)
+        
+        self.click_counter = 0
+        
+        self.child_UI()
+        self.MainGrid()
+        
+        
+        
+
+    def display_update(self):
+        self.macro_display_screen.appendPlainText(self.macro_display[-2])
+        self.macro_display_screen.appendPlainText(self.macro_display[-1])
+        self.macro_display_screen.appendPlainText('')
+        
+        
+    def child_UI(self):
+        self.Hotkeys = keyboard_widget()
+        self.Hotkeys.hide()
+        
+        self.Hotkeys.hotkeys['Ctrl+Z'].clicked.connect(self.Hotkey_Ctrl_Z)
+        self.Hotkeys.hotkeys['Ctrl+Z'].clicked.connect(self.display_update)
+        self.Hotkeys.hotkeys['Ctrl+Z'].clicked.connect(self.Hotkeys.hide)
+        
+        self.Hotkeys.hotkeys['Ctrl+C'].clicked.connect(self.Hotkey_Ctrl_C)
+        self.Hotkeys.hotkeys['Ctrl+C'].clicked.connect(self.display_update)
+        self.Hotkeys.hotkeys['Ctrl+C'].clicked.connect(self.Hotkeys.hide)
+        
+        self.Hotkeys.hotkeys['Ctrl+V'].clicked.connect(self.Hotkey_Ctrl_V)
+        self.Hotkeys.hotkeys['Ctrl+V'].clicked.connect(self.display_update)
+        self.Hotkeys.hotkeys['Ctrl+V'].clicked.connect(self.Hotkeys.hide)
+        
+        self.Hotkeys.hotkeys['Ctrl+F'].clicked.connect(self.Hotkey_Ctrl_F)
+        self.Hotkeys.hotkeys['Ctrl+F'].clicked.connect(self.display_update)
+        self.Hotkeys.hotkeys['Ctrl+F'].clicked.connect(self.Hotkeys.hide)
+        
+        self.Hotkeys.hotkeys['Ctrl+L'].clicked.connect(self.Hotkey_Ctrl_L)
+        self.Hotkeys.hotkeys['Ctrl+L'].clicked.connect(self.display_update)
+        self.Hotkeys.hotkeys['Ctrl+L'].clicked.connect(self.Hotkeys.hide)
+        
+        self.Hotkeys.hotkeys['Delete'].clicked.connect(self.Hotkey_Delete)
+        self.Hotkeys.hotkeys['Delete'].clicked.connect(self.display_update)
+        self.Hotkeys.hotkeys['Delete'].clicked.connect(self.Hotkeys.hide)
+        
+        self.Hotkeys.hotkeys['Enter'].clicked.connect(self.Hotkey_Enter)
+        self.Hotkeys.hotkeys['Enter'].clicked.connect(self.display_update)
+        self.Hotkeys.hotkeys['Enter'].clicked.connect(self.Hotkeys.hide)
+        
+        self.Hotkeys.hotkeys['Tab'].clicked.connect(self.Hotkey_Tab)
+        self.Hotkeys.hotkeys['Tab'].clicked.connect(self.display_update)
+        self.Hotkeys.hotkeys['Tab'].clicked.connect(self.Hotkeys.hide)
+        
+        self.Hotkeys.hotkeys['Ctrl+A'].clicked.connect(self.Hotkey_Ctrl_A)
+        self.Hotkeys.hotkeys['Ctrl+A'].clicked.connect(self.display_update)
+        self.Hotkeys.hotkeys['Ctrl+A'].clicked.connect(self.Hotkeys.hide)
+        
+
+        self.mouse_control = mouse_widget()
+        self.mouse_control.hide()
+        
+        self.mouse_control.mousecontrols_button.clicked.connect(self.Clicks)
+        self.mouse_control.mousecontrols_button.clicked.connect(self.display_update)
+        self.mouse_control.mousecontrols_button.clicked.connect(self.mouse_control.hide)
+        
+        self.excel_entry_UI = Excel_entry_widget()
+        self.excel_entry_UI.hide()
+        
+        self.Hotkeys.hotkeys['Excel Entry'].clicked.connect(self.excel_entry_UI.show)
+        self.Hotkeys.hotkeys['Excel Entry'].clicked.connect(self.Hotkeys.hide)
+        
+        self.excel_entry_UI.Excel_entry_button.clicked.connect(self.Excel_entry)
+        self.excel_entry_UI.Excel_entry_button.clicked.connect(self.display_update)
+        self.excel_entry_UI.Excel_entry_button.clicked.connect(self.excel_entry_UI.hide)
+        
+        
+        self.typing_entry_UI = Typing_entry_widget()
+        self.typing_entry_UI.hide()
+        
+        self.Hotkeys.hotkeys['Typing Entry'].clicked.connect(self.typing_entry_UI.show)
+        self.Hotkeys.hotkeys['Typing Entry'].clicked.connect(self.Hotkeys.hide)
+        
+        self.typing_entry_UI.Typing_entry_button.clicked.connect(self.Typing_entry)
+        self.typing_entry_UI.Typing_entry_button.clicked.connect(self.display_update)
+        self.typing_entry_UI.Typing_entry_button.clicked.connect(self.typing_entry_UI.hide)
+        
+        
+        
+        
+#Final Execution function. Will check if there's an excel data first to 
+#execute the macro. If no excel then it just uses other stuff
+    def macro_execute(self):
+        macro = self.macro.copy()
+        excel = self.excel_data.copy()
+        
+        sleep(3)
+        
+        if self.excel_data_check == 1:
+            for i in range(len(excel)):
+    #             for j in self.failsafe_pictures:
+    #                 if pyautogui.locateOnScreen(j) == None:
+    #                     pass
+    #                 else:
+    #                     self.progress_screen.setText('Error. Lost connection. Failed to input entry '+str(i)+'.')
+    #                     break
+                [eval(k,{},{'i':i, 'excel':excel,'pyautogui':pyautogui,'sleep':sleep}) for k in macro]
+#                 print(excel['URL'][i])
+#                 print(excel['number'][i])
+#                 print(i)
+#                 self.progress_screen.appendPlainText('Completed data entry '+str(i)+'.') #TODO doesn't update during
+
+        else:
+    #         for j in self.failsafe_pictures:
+    #             if pyautogui.locateOnScreen(j) == None:
+    #                 pass
+    #             else:
+    #                 self.progress_screen.setText('Error. Lost connection.')
+    #                 break
+            [eval(k,{},{'pyautogui':pyautogui,'sleep':sleep}) for k in macro]
+        
+        if self.clear_box.isChecked() == True:
+            self.macro_display_screen.clear()
+            self.macro = []    
+            self.macro_display = []      
+            self.excel_data = []   
+            self.excel_data_check = 0 
+            self.loadmacro_line.clear()
+            self.loadexcel_line.clear()
+            
+        completion_year = str(localtime()[0])
+        completion_month = str(localtime()[1])
+        completion_day = str(localtime()[2])
+        if localtime()[3]%12 == 0:
+            completion_hour = '12'
+        else:
+            completion_hour = str('%02d' % (localtime()[3]%12))
+        completion_min = str('%02d' % localtime()[4])
+        completion_sec = str('%02d' % localtime()[5])
+        if localtime()[3]//12 == 0:
+            completion_ampm = 'AM'
+        else:
+            completion_ampm = 'PM'
+            
+        completion_text = '['+completion_month+'/'+completion_day+'/'+completion_year+', '+completion_hour+':'+completion_min+':'+completion_sec+' '+completion_ampm+"] Macro Completed \n"
+        self.progress_screen.appendPlainText(completion_text)
+        
+
+#Creating main window grid buttons into self separately into general layout because idk how to use gridlayout to stretch
+#grid will be 6 columns and 8 rows
+
+        
+    def MainGrid(self):
+        
+        global width, height
+        
+        self.loadmacro_label = QLabel('Load Macro')
+        self.loadmacro_label.setFont(QFont('Arial',10,65))
+        self.loadmacro_label.setAlignment(Qt.AlignCenter)
+        
+        self.loadmacro_button = QPushButton('Open')
+        self.loadmacro_button.setStatusTip('Click to load macro file (*.JSON)')
+        self.loadmacro_button.clicked.connect(self.loadmacro)
+
+        self.loadmacro_line = QLineEdit()
+        self.loadmacro_line.setFont(QFont('Arial',12))
+        self.loadmacro_line.setAlignment(Qt.AlignCenter)
+        self.loadmacro_line.setReadOnly(True)
+        self.loadmacro_line.setFixedWidth(round(width*0.15625))
+        self.loadmacro_line.setDragEnabled(True)
+        
+        self.loadexcel_label = QLabel('Load Excel')
+        self.loadexcel_label.setFont(QFont('Arial',10,65))
+        self.loadexcel_label.setAlignment(Qt.AlignCenter)
+
+        self.loadexcel_button = QPushButton('Open')
+        self.loadexcel_button.setStatusTip('Click to load excel data file')
+        self.loadexcel_button.clicked.connect(self.loadexcel)
+
+        self.loadexcel_line = QLineEdit()
+        self.loadexcel_line.setFont(QFont('Arial',12))
+        self.loadexcel_line.setAlignment(Qt.AlignCenter)
+        self.loadexcel_line.setReadOnly(True)
+        self.loadexcel_line.setFixedWidth(round(width*0.15625))
+        self.loadexcel_line.setDragEnabled(True)
+        
+        sleep_layout = QGridLayout()
+        sleep_layout.setVerticalSpacing(8)
+
+        self.sleep_time_label = QLabel('Action Delay (sec)')
+        self.sleep_time_label.setFont(QFont('Arial',10,65))
+        self.sleep_time_label.setAlignment(Qt.AlignCenter)
+        
+        self.sleep_time_button = QPushButton('Apply')
+        self.sleep_time_button.setStatusTip('Click to apply (in seconds) delay after action. Min 0.1s, Max 9.9s')
+        self.sleep_time_button.clicked.connect(self.sleeptime)
+
+        sleep_time_validator = QDoubleValidator(self)
+        sleep_time_validator.setBottom(0.1)
+        sleep_time_validator.setTop(19.9)
+        sleep_time_validator.setDecimals(1)
+        sleep_time_validator.setNotation(0)
+
+        self.sleep_time_line = QLineEdit()
+        self.sleep_time_line.setText('0.1')
+        self.sleep_time_line.setFont(QFont('Arial',12))
+        self.sleep_time_line.setAlignment(Qt.AlignCenter)
+        self.sleep_time_line.setValidator(sleep_time_validator)
+        
+        
+        sleep_layout.addWidget(self.sleep_time_label,0,0)
+        sleep_layout.addWidget(self.sleep_time_line,1,0)
+        sleep_layout.addWidget(self.sleep_time_button,2,0)
+        
+        self.macro_display_label = QLabel('Current Macro in use')
+        self.macro_display_label.setFont(QFont('Arial',10,65))
+        self.macro_display_label.setAlignment(Qt.AlignCenter)
+        
+        self.macro_display_screen = QPlainTextEdit()
+        self.macro_display_screen.setUndoRedoEnabled(True)
+        self.macro_display_screen.setFixedHeight(round(0.15*height))
+        self.macro_display_screen.setFixedWidth(round(0.2135*width))
+        self.macro_display_screen.setReadOnly(True)
+        
+        self.progress_label = QLabel('Current progress')
+        self.progress_label.setFont(QFont('Arial',10,65))
+        self.progress_label.setAlignment(Qt.AlignCenter)
+        
+        self.progress_screen = QPlainTextEdit()
+        self.progress_screen.setFixedHeight(round(height*0.0907))
+        self.progress_screen.setFixedWidth(round(0.2135*width))
+        self.progress_screen.setReadOnly(True)
+            
+        sidebuttons_layout = QGridLayout()
+        sidebuttons_layout.setVerticalSpacing(10)
+        
+        self.sidebuttons_label = QLabel('Commands')
+        self.sidebuttons_label.setFont(QFont('Arial',10,65))
+        self.sidebuttons_label.setAlignment(Qt.AlignCenter)
+        
+        self.hotkeys_button = QPushButton('Input Hotkey')
+        self.hotkeys_button.setStatusTip('Click to enter Hotkey command window')
+        self.hotkeys_button.clicked.connect(self.Hotkeys.show)
+        
+        self.mouse_controls_button = QPushButton('Input Mouse Controls')
+        self.mouse_controls_button.setStatusTip('Click to enter Mouse controls command window')
+        self.mouse_controls_button.clicked.connect(self.mouse_control.show)
+        
+        self.undo_button = QPushButton('Undo')
+        self.undo_button.setStatusTip('Click to undo/remove previous input')
+        self.undo_button.clicked.connect(self.Undo)
+        
+        self.save_button = QPushButton('Save')
+        self.save_button.setStatusTip('Click to save macro file')
+        self.save_button.clicked.connect(self.savemacro)
+        
+        self.reset_button = QPushButton('Reset')
+        self.reset_button.setStatusTip('Click to reset all inputs')
+        self.reset_button.clicked.connect(self.Reset)
+        
+        self.blank_label = QLabel('')
+        
+        self.clear_box = QCheckBox()
+        self.clear_box.setCheckState(Qt.CheckState(2))
+        self.clear_box.setStyleSheet('margin-left:50%; margin-right:50%;')
+        
+        self.clear_box_label = QLabel('Clear at end?')
+        self.clear_box_label.setFont(QFont('Arial',8,65))
+        self.clear_box_label.setAlignment(Qt.AlignCenter)
+        
+        self.execute_button = QPushButton('Start Macro')
+        self.execute_button.setStatusTip('Click to start macro input')
+        self.execute_button.clicked.connect(self.macro_execute)
+        
+        sidebuttons_layout.addWidget(self.sidebuttons_label,0,0,1,1)
+        sidebuttons_layout.addWidget(self.hotkeys_button,1,0,1,1)
+        sidebuttons_layout.addWidget(self.mouse_controls_button,2,0,1,1)
+        sidebuttons_layout.addWidget(self.undo_button,3,0,1,1)
+        sidebuttons_layout.addWidget(self.save_button,4,0,1,1)
+        sidebuttons_layout.addWidget(self.reset_button,5,0,1,1)
+        
+        clear_box_layout = QGridLayout()
+        clear_box_layout.setAlignment(Qt.AlignCenter)
+        clear_box_layout.addWidget(self.clear_box_label,0,0,1,1)
+        clear_box_layout.addWidget(self.clear_box,0,1,1,1)
+        
+        sidebuttons_layout.addWidget(self.blank_label,6,0,1,1)
+        sidebuttons_layout.addLayout(clear_box_layout,7,0,1,1)
+        sidebuttons_layout.addWidget(self.execute_button,8,0,1,1)
+        
+
+        self.generalLayout.addWidget(self.loadmacro_label,0,0,1,4)
+        self.generalLayout.addWidget(self.loadmacro_button,1,0,1,1)
+        self.generalLayout.addWidget(self.loadmacro_line,1,1,1,3)
+        
+        self.generalLayout.addWidget(self.loadexcel_label,2,0,1,4)
+        self.generalLayout.addWidget(self.loadexcel_button,3,0,1,1)
+        self.generalLayout.addWidget(self.loadexcel_line,3,1,1,3)
+        
+        self.generalLayout.addLayout(sleep_layout,0,4,4,1)
+
+        
+        self.generalLayout.addWidget(self.macro_display_label,4,0,1,4)
+        self.generalLayout.addWidget(self.macro_display_screen,5,0,4,4)
+        
+        self.generalLayout.addWidget(self.progress_label,10,0,1,4)
+        self.generalLayout.addWidget(self.progress_screen,11,0,4,4)
+        
+        self.generalLayout.addLayout(sidebuttons_layout,5,4,9,1)
+
+    #Function to adjust self.sleep_timer when pressed to get delay adjustments
+    def sleeptime(self):
+        if float(self.sleep_time_line.text())>0.1:
+            self.sleep_timer = float(self.sleep_time_line.text())
+        else:
+            self.sleep_timer = 0.1
+        self.mouse_control.update
+        
+        
+    ############### Creating Hotkey Functions #######################
+    def Hotkey_Ctrl_A(self): 
+        self.macro.append("pyautogui.hotkey('ctrl','a')")
+        self.macro_display.append('Press Hotkey Ctrl+A')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+
+    def Hotkey_Ctrl_Z(self):        
+        self.macro.append("pyautogui.hotkey('ctrl','z')")
+        self.macro_display.append('Press Hotkey Ctrl+Z')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+
+    def Hotkey_Ctrl_C(self):        
+        self.macro.append("pyautogui.hotkey('ctrl','c')")
+        self.macro_display.append('Press Hotkey Ctrl+C')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+
+    def Hotkey_Ctrl_V(self):        
+        self.macro.append("pyautogui.hotkey('ctrl','v')")
+        self.macro_display.append('Press Hotkey Ctrl+V')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+
+    def Hotkey_Ctrl_F(self):
+        
+        self.macro.append("pyautogui.hotkey('ctrl','f')")
+        self.macro_display.append('Press Hotkey Ctrl+F')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+
+    def Hotkey_Ctrl_L(self):       
+        self.macro.append("pyautogui.hotkey('ctrl','l')")
+        self.macro_display.append('Press Hotkey Ctrl+L')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+
+    def Hotkey_Delete(self):        
+        self.macro.append("pyautogui.press('delete')")
+        self.macro_display.append('Press Delete')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+
+    def Hotkey_Enter(self):       
+        self.macro.append("pyautogui.press('enter')")
+        self.macro_display.append('Press Enter')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+
+    def Hotkey_Tab(self):      
+        self.macro.append("pyautogui.press('\t')")
+        self.macro_display.append('Press Tab')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+        
+    def Typing_entry(self):        
+        text = self.typing_entry_UI.Typing_entry_line.text()
+        self.macro.append("pyautogui.write('"+text+"')")
+        self.macro_display.append("Enter '"+text+"'.")
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+        
+    def Excel_entry(self):        
+        header = self.excel_entry_UI.Excel_entry_line.text()
+        self.macro.append("pyautogui.write(str(excel['"+header+"'][i]))")
+        self.macro_display.append("Enter data from '"+header+"' column from excel data.")
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+        self.excel_data_check = 1
+        
+    ############### Creating Mouse Control Functions #######################
+    
+    #Creating definition for signaling clicks during macro set up
+    def clicked(self):
+        self.click_counter = 1
+        unhook_all
+        
+    def Clicks(self):
+        self.click_counter = 0
+        click_number = int(self.mouse_control.mousecontrols_clicks_line.text())
+        while self.click_counter == 0:
+            sleep(0.5)
+            on_button(self.clicked,args=(),buttons=('left'),types=('up'))
+        x = pyautogui.position()[0]
+        y = pyautogui.position()[1]
+        self.macro.append('pyautogui.click(x='+str(x)+', y='+str(y)+', clicks = '+str(click_number)+')')
+        self.macro.append('sleep('+str(self.sleep_timer)+')')
+        self.macro_display.append(str(click_number)+' clicks at position ('+str(x)+','+str(y)+')')
+        self.macro_display.append('Wait '+str(self.sleep_timer)+' seconds')
+        
+
+    #Functions for loading files and saving macro
+
+    #To load macro
+    def loadmacro(self):
+        
+        filename = QFileDialog.getOpenFileName(self, 'Load Macro File', self.cur_dir,
+                                                 'JSON Files (*.JSON)')[0]
+        if filename == '':
+            pass
+        else:
+            with open(filename, 'r') as f:
+                full_macro = json.load(f)
+            self.macro = full_macro[0]
+            self.macro_display = full_macro[1]
+            self.loadmacro_line.setText(filename)
+            count = 0
+            display_temp = self.macro_display.copy()
+            for i in range(len(display_temp)):
+                if (count+1)%3==0:
+                    display_temp.insert(count,'\n')
+                    count = count+1
+                count = count+1
+            display_text = ''.join((i+'\n') for i in display_temp)
+            self.macro_display_screen.setPlainText(display_text)
+
+            print(self.macro)
+
+
+    #To Save macro
+    def savemacro(self):
+
+        full_macro = [self.macro,self.macro_display]
+        filename = QFileDialog.getSaveFileName(self, 'Save Macro File', self.cur_dir,
+                                                 'JSON Files (*.JSON)')[0]
+
+        with open(filename,'w') as f:
+            json.dump(full_macro,f)
+            
+        self.loadmacro_line.setText(filename)
+
+    #To load excel files
+    def loadexcel(self):
+        
+        filename = QFileDialog.getOpenFileName(self, 'Load Excel File', self.cur_dir,
+                                                  'Excel Files (*.xlsx;*.xltx;*.csv;*.tsv;*.xls)')[0]
+        if filename == '':
+            pass
+        else:
+            if filename.find('.xl') != -1:
+                self.excel_data = read_excel(filename,delimiter = '\t')
+            else:
+                self.excel_data = read_csv(filename,delimiter = '\t',
+                               skipinitialspace=True,encoding='latin-1')
+            self.excel_data_check = 1
+            self.loadexcel_line.setText(filename)
+
+            print(self.excel_data)
+
+    # def loadfailpic(self) TODO
+
+    #Function to undo macros in general
+    def Undo(self):
+
+        if len(self.macro)>0 and len(self.macro_display)>0:
+            self.macro.pop()
+            self.macro.pop()
+            self.macro_display_screen.undo()
+            self.macro_display_screen.undo()
+            self.macro_display_screen.undo()
+            self.macro_display.pop()
+            self.macro_display.pop()
+        else:
+            pass
+        
+    def Reset(self):
+        resp = QMessageBox.question(self,'Reset Program','Would you like to clear stored data and reset?',
+                                       QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
+        if resp == QMessageBox.Yes:
+            self.macro_display_screen.clear()
+            self.progress_screen.clear()
+            self.macro = []    
+            self.macro_display = []      
+            self.excel_data = []   
+            self.excel_data_check = 0 
+            self.sleep_timer = 0.1
+            self.sleep_time_line.setText('0.1')
+            self.excel_entry_UI.Excel_entry_line.clear()
+            self.loadmacro_line.clear()
+            self.loadexcel_line.clear()
+            self.typing_entry_UI.Typing_entry_line.clear()
+            self.mouse_control.mousecontrols_clicks_line.setText('1')
+        else:
+            pass
+    
+    def closeEvent(self, event):
+        
+        resp = QMessageBox.question(self,'Exit Program','Would you like to end the program?',
+                                       QMessageBox.Yes|QMessageBox.No,QMessageBox.No)
+        if resp == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+        
+
+#######################################################################    
+################## Creating UI for mouse functions ####################
+#######################################################################
+
+class mouse_widget(QWidget):
+    
+    def __init__(self):
+        global width, height
+        super(mouse_widget,self).__init__()
+        self.setWindowTitle('Mouse Input')
+        self.setFixedSize(round(0.235*width),round(0.15*height))
+        
+        self.layout = QGridLayout()
+        
+        self.mousecontrols_line = QLineEdit()
+        self.mousecontrols_line.setReadOnly(True)
+        self.mousecontrols_line.setText('Enter # of click --> press "Record" to start --> click where you want')
+        self.mousecontrols_line.setFont(QFont('Arial',8,55))
+        self.mousecontrols_line.setAlignment(Qt.AlignCenter)
+        
+        self.mousecontrols_button = QPushButton('Record')
+        
+        
+        self.mousecontrols_clicks_explain = QLabel('# of Clicks')
+        self.mousecontrols_clicks_explain.setFont(QFont('Arial',10,63))
+        self.mousecontrols_clicks_explain.setAlignment(Qt.AlignCenter)
+        
+        self.mousecontrols_clicks_line = QLineEdit()
+        self.mousecontrols_clicks_line.setText('1')
+        self.mousecontrols_clicks_line.setValidator(QIntValidator())
+        self.mousecontrols_clicks_line.setAlignment(Qt.AlignCenter)
+        
+        self.layout.addWidget(self.mousecontrols_line,0,0)
+        self.layout.addWidget(self.mousecontrols_clicks_explain,1,0)
+        self.layout.addWidget(self.mousecontrols_clicks_line,2,0)
+        self.layout.addWidget(self.mousecontrols_button)
+        
+        
+        self.setLayout(self.layout)    
+        
+    
+#######################################################################    
+################# Creating UI for keyboard functions ##################
+#######################################################################
+
+class keyboard_widget(QWidget):
+    
+    def __init__(self):
+        global width, height
+        super(keyboard_widget,self).__init__()
+        self.setWindowTitle('Hotkeys Input')
+        self.setFixedSize(round(0.235*width),round(0.235*height))
+        
+        self.layout = QGridLayout()
+        self.layout.setVerticalSpacing(12)
+        self.layout.setHorizontalSpacing(12)
+        
+        self.Excel_entry_window = Excel_entry_widget()
+        self.Typing_entry_window = Typing_entry_widget()
+        
+        self.hotkeys_explain_line = QLineEdit()
+        self.hotkeys_explain_line.setText('Click on the hotkey to input')
+        self.hotkeys_explain_line.setReadOnly(True)
+        self.hotkeys_explain_line.setAlignment(Qt.AlignCenter)
+        self.hotkeys_explain_line.setFont(QFont('Arial',10,65))
+        self.layout.addWidget(self.hotkeys_explain_line,0,0,1,4)
+        
+        self.HotKeys()
+        self.setLayout(self.layout)
+        
+        
+
+    #Creating HotKeys grid into self
+    def HotKeys(self):
+        global width, height
+        # Initiating hotkeys buttons and display
+        self.hotkeys = {}
+        # Putting hotkey names and positioning for grid layout
+        hotkeys_names = {'Ctrl+Z': (0,0),
+                    'Ctrl+C': (0,1),
+                    'Ctrl+V': (1,0),
+                    'Ctrl+F': (1,1),
+                    'Ctrl+L':(2,0),
+                    'Delete':(2,1),
+                    'Enter':(0,2),
+                    'Ctrl+A':(1,2),
+                    'Tab':(2,2),
+                    'Excel Entry':(0,3),
+                    'Typing Entry':(1,3)}
+
+        # Initiating grid layout    
+        hotkeys_layout = QGridLayout()
+
+        # Creating the individual buttons for hotkeys into the self and updating
+        # self.hotkeys. Also connecting buttons to the functions
+        self.hotkeys['Display'] = QLineEdit()
+        self.hotkeys['Display'].setFont(QFont('Arial',14))
+        self.hotkeys['Display'].setReadOnly(True)
+        self.hotkeys['Display'].setAlignment(Qt.AlignCenter)
+        self.hotkeys['Display'].setText('Click on a Hotkey/Button to enter into macro')
+
+        self.hotkeys['Ctrl+Z'] = QPushButton('Ctrl+Z')
+        self.hotkeys['Ctrl+Z'].setStatusTip('"Undo" Hotkey')
+
+        self.hotkeys['Ctrl+C'] = QPushButton('Ctrl+C')
+        self.hotkeys['Ctrl+C'].setStatusTip('"Copy" Hotkey')
+
+        self.hotkeys['Ctrl+V'] = QPushButton('Ctrl+V')
+        self.hotkeys['Ctrl+V'].setStatusTip('"Paste" Hotkey')
+
+        self.hotkeys['Ctrl+F'] = QPushButton('Ctrl+F')
+        self.hotkeys['Ctrl+F'].setStatusTip('"Find" Hotkey')
+
+        self.hotkeys['Ctrl+L'] = QPushButton('Ctrl+L')
+        self.hotkeys['Ctrl+L'].setStatusTip('"URL" selector Hotkey for Chrome based browsers')
+
+        self.hotkeys['Delete'] = QPushButton('Delete')
+        self.hotkeys['Delete'].setStatusTip('Delete')
+
+        self.hotkeys['Enter'] = QPushButton('Enter')
+        self.hotkeys['Enter'].setStatusTip('Enter')
+
+        self.hotkeys['Tab'] = QPushButton('Tab')
+        self.hotkeys['Tab'].setStatusTip('Tab')
+
+        self.hotkeys['Ctrl+A'] = QPushButton('Ctrl+A')
+        self.hotkeys['Ctrl+A'].setStatusTip('"Select All" Hotkey')
+        
+        self.hotkeys['Excel Entry'] = QPushButton('Excel Entry')
+        self.hotkeys['Excel Entry'].setStatusTip('Click to input from excel data')
+        self.hotkeys['Excel Entry'].setFont(QFont('Arial',8,65))
+          
+        self.hotkeys['Typing Entry'] = QPushButton('Typing Entry')
+        self.hotkeys['Typing Entry'].setStatusTip('Click to input whatever you type')
+        self.hotkeys['Typing Entry'].setFont(QFont('Arial',8,65))
+        
+
+        # Laying out the buttons to a fixed size and hotkeys
+        for i,j in hotkeys_names.items():
+            self.hotkeys[i].setFixedSize(round(0.052083*width),round(0.04629*height))
+            hotkeys_layout.addWidget(self.hotkeys[i],j[0],j[1])
+        
+        self.layout.addLayout(hotkeys_layout,2,0,3,4)
+
+
+
+#######################################################################        
+################# Creating UI for Excel and Typing ####################
+#######################################################################
+
+class Excel_entry_widget(QWidget):
+    
+    def __init__(self):
+        global width, height
+        super(Excel_entry_widget,self).__init__()
+        self.setWindowTitle('Excel Entry')
+        self.setFixedSize(round(0.18*width),round(0.125*height))
+        
+        layout = QGridLayout()
+        
+        self.Excel_entry_line = QLineEdit()
+        self.Excel_entry_line.setPlaceholderText('Type Excel data header/column name here')
+        
+        self.Excel_entry_button = QPushButton('Record')
+        
+        layout.addWidget(self.Excel_entry_line)
+        layout.addWidget(self.Excel_entry_button)
+        
+        self.setLayout(layout)
+        
+    
+            
+class Typing_entry_widget(QWidget):
+
+    def __init__(self):
+        global width, height
+        super(Typing_entry_widget,self).__init__()
+        self.setWindowTitle('Text Input Entry')
+        self.setFixedSize(round(0.18*width),round(0.125*height))
+        
+        layout = QGridLayout()
+        
+        self.Typing_entry_line = QLineEdit()
+        self.Typing_entry_line.setPlaceholderText('Type text to input here')
+        
+        self.Typing_entry_button = QPushButton('Record')
+        
+        layout.addWidget(self.Typing_entry_line)
+        layout.addWidget(self.Typing_entry_button)
+        
+        self.setLayout(layout)
+
+        
+
+    
+def main():
+    macro = QApplication(sys.argv)
+    view = MainUI()
+    view.show()
+    sys.exit(macro.exec_())
+        
+if __name__ =='__main__':
+    main()
